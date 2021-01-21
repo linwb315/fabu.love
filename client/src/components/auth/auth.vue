@@ -4,7 +4,7 @@
 
       <div class="user-logo"></div>
       <div class="user-divier"></div>
-      <div class="user-name">爱发布</div>
+      <div class="user-name">一人一车</div>
 
       <div class="user-item" style="margin-top: 24.87vh" @click="clickSubItem('api')">
         <span class="icon-ic_api_s"></span>
@@ -163,7 +163,8 @@
               'userName': this.username,
               'userId': response.data._id,
               'teamArr': response.data.teams,
-              'email': response.data.email
+              'email': response.data.email,
+              'apiToken': response.data.apiToken
             }
             // 保存用户信息
             saveUserInfo(user)

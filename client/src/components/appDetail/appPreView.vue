@@ -5,7 +5,9 @@
       <!--中间-->
       <div :class="getContentClass()" v-if="this.appBaseData">
         <div :class="getLeftClass()">
-          <div v-if="this.isIos || this.isAndroid">
+          <!--手机上查看-->
+          <div v-show="isPhone">
+            <p>手机</p>
             <phoneWrapper
               :appBaseData="appBaseData"
               :appVersionInfo="appVersionInfo"
@@ -15,24 +17,27 @@
           </div>
 
 
-          <div class="pcWrapper" v-if="!this.isIos && !this.isAndroid">
+          <!--pc上查看-->
+          <div class="pcWrapper" v-show="!isPhone">
+            <p>33333333</p>
             <img class="appicon" :src="getIconUrl()" alt="">
             <p class="title">{{this.appBaseData.appName}}</p>
             <div class="info">
-              <p class="desc">版本：{{this.appVersionInfo.versionStr}}</p><span>大小：{{(this.appVersionInfo.size/1024/1024).toFixed(1)}}M</span>
+              <p v-if="this.appVersionInfo.versionStr" class="desc">版本：{{this.appVersionInfo.versionStr}}</p><span>大小：{{(this.appVersionInfo.size/1024/1024).toFixed(1)}}M</span>
             </div>
             <p class="date">发布日期： {{ this.appVersionInfo.creatDateStr }} </p>
-            <div v-if="!showDownLoadBtn">
+            <div v-if="showPasswordInput">
               <el-input v-model="pwd" type="password" placeholder="请输入密码" class="pwd"></el-input>
               <el-button @click="clickSure" type="primary" round class="downloadBtn">确定</el-button>
             </div>
+
             <el-button v-if="showDownLoadBtn" @click="clickDownLoadBtn" class="downloadBtn" type="primary" round><i :class="this.platformStr === 'ios' ? 'icon-ic_ios':'icon-ic_andr'"></i>    下载安装</el-button>
           </div>
         </div>
 
 
-        <!--手机视图-->
-        <div class="preview-mobilewrapper" v-show="this.showQRCode">
+        <!--右侧二维码-->
+        <div class="preview-mobilewrapper" v-show="!isPhone">
           <img class="mobieImg" src='../../assets/ic_mobilphone.png'>
           <vue-qr class="qrcodeImg" :text="downloadUrl" :margin="20"></vue-qr>
           <p class="codetips">请扫描二维码下载APP</p>
@@ -58,8 +63,8 @@
         appBaseData: null,
         downloadUrl: '',
         platformStr: '',
-        showQRCode: false,
-        pwd: ''
+        pwd: '',
+        isPhone: false
       }
     },
     computed: {
@@ -73,26 +78,39 @@
         var isAndroid = !!(u.match(/(Android)\s+([\d.]+)/))
         return isAndroid
       },
-      showDownLoadBtn() {
-        if (this.appBaseData.installWithPwd !== 1 || this.pwd === this.appBaseData.installPwd) {
-          return true
-        } else {
+      showDownLoadBtn() { // mac端不显示，密码安装且密码不正确时不显示
+        var p = navigator.platform
+        if (p.indexOf('Mac') === 0) {
           return false
+        } else {
+          if (this.appBaseData.installWithPwd !== 1 || this.pwd === this.appBaseData.installPwd) {
+            return true
+          } else {
+            return false
+          }
         }
+
+      },
+      showPasswordInput() {
+          if (this.appBaseData.installWithPwd === 1 && this.pwd !== this.appBaseData.installPwd) { // 密码安装,且密码不对的情况下展示，其他情况都隐藏
+              return true
+          }
       }
     },
-    created() {
-      console.log(this.$route.fullPath)
-      console.log(window.origin)
-
+    mounted() {
       this.getAppInfo(this.$route.params.id)
 
       // 判断是否是手机设备
       if (this.isIos || this.isAndroid) {
-        this.showQRCode = false
+        this.isPhone = true
       } else {
-        this.showQRCode = true
+        this.isPhone = false
       }
+    },
+    created() {
+      this.$nextTick(() => {
+      })
+
     },
     methods: {
       getTableBackground(index) {
@@ -105,12 +123,16 @@
       getAppInfo(shortUrl) {
         AppResourceApi.getAppInfoByShortUrl(shortUrl).then((res) => {
           console.log(res)
+          if (res.data.version === null) {
+              this.$message.error('未检测到版本信息')
+              return
+          }
           this.appVersionInfo = res.data.version
           this.appBaseData = res.data.app
           let releaseDate = new Date(this.appVersionInfo.uploadAt)
           this.downloadUrl = `${window.origin}${this.$route.fullPath}`
           this.platformStr = res.data.app.platform
-          this.appVersionInfo.creatDateStr = `${releaseDate.getFullYear()}-${releaseDate.getMonth() + 1}-${releaseDate.getDate()}`
+          this.appVersionInfo.creatDateStr = `${releaseDate.getFullYear()}-${releaseDate.getMonth() + 1}-${releaseDate.getDate()} ${releaseDate.getHours()}:${releaseDate.getMinutes()}:${releaseDate.getSeconds()}`
           if (this.appBaseData.installPwd === 1) {
             this.installWithPwd = true
           } else {
@@ -118,7 +140,7 @@
           }
 
         }, reject => {
-
+          this.$message.error('服务器错误')
         })
       },
       getIconUrl() {
@@ -127,9 +149,9 @@
       clickDownLoadBtn() {
         if (this.isIos) {
           const a = document.createElement('a')
-          a.setAttribute('href', `itms-services://?action=download-manifest&url=${this.axios.defaults.baseURL}api/plist/${this.appBaseData._id}/${this.appVersionInfo._id}`)
+//            `itms-services://?action=download-manifest&url=${this.axios.defaults.baseURL}api/plist/${this.appBaseData._id}/${this.appVersionInfo._id}`
+          a.setAttribute('href', this.appVersionInfo.installUrl)
           a.click()
-          console.log(`itms-services://?action=download-manifest&url=${this.axios.defaults.baseURL}api/plist/${this.appBaseData._id}/${this.appVersionInfo._id}`)
         } else {
           const a = document.createElement('a')
           let url = `${this.axios.defaults.baseURL}${this.appVersionInfo.downloadUrl}`
@@ -160,14 +182,14 @@
       },
       getContentClass() {
         // 判断是否是手机设备
-        if (this.isIos || this.isAndroid) {
+        if (this.isPhone) {
           return 'preview-middlewrapper-forPhone'
         } else {
           return 'preview-middlewrapper'
         }
       },
       getLeftClass() {
-        if (this.isIos || this.isAndroid) {
+        if (this.isPhone) {
           return 'left-forPhone'
         } else {
           return 'left'
